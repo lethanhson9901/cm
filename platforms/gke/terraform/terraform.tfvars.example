@@ -1,0 +1,16 @@
+project_id = "your-project-id"
+region = "us-central1"
+project_name = "app-source"
+environment = "dev"
+allowed_cidr = "10.0.0.0/8"  # Adjust according to your network
+
+zones = [
+  "us-central1-a",
+  "us-central1-b",
+  "us-central1-c"
+]
+
+subnet_cidr = "10.0.0.0/20"
+pod_cidr = "10.1.0.0/16"
+service_cidr = "10.2.0.0/16"
+master_cidr = "172.16.0.0/28"

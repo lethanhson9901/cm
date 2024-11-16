@@ -1,0 +1,66 @@
+# .github/workflows/deploy-gke.yml
+name: Deploy to GKE
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'platforms/gke/**'
+      - 'apps/**'
+      - 'environments/gke/**'
+  workflow_dispatch:
+
+env:
+  GKE_PROJECT: your-project-id
+  GKE_CLUSTER: main-cluster
+  GKE_ZONE: us-central1-a
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+        working-directory: platforms/gke/terraform
+
+      - name: Terraform Validate
+        run: |
+          terraform init -backend=false
+          terraform validate
+        working-directory: platforms/gke/terraform
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: gke-prod
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Auth to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials $GKE_CLUSTER \
+            --zone $GKE_ZONE \
+            --project $GKE_PROJECT
+
+      - name: Deploy to GKE
+        working-directory: platforms/gke
+        run: |
+          ./scripts/deploy.sh prod
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
