@@ -1,0 +1,15 @@
+# Platform team owns all infrastructure changes
+*                                   @platform-team
+/infrastructure/                    @platform-team
+/platform/                         @platform-team
+
+# Security team reviews all security-related changes
+/platform/security/                @security-team
+/policies/                         @security-team
+/tests/security/                   @security-team
+
+# Application team owns application manifests
+/applications/                     @app-team
+
+# DevOps team reviews all pipeline changes
+/.github/workflows/                @devops-team
