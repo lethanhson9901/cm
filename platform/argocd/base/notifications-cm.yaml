@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  trigger.on-sync-failed: |
+    - description: Application syncing has failed
+      send:
+      - slack-workflow-notifications
+  trigger.on-deployed: |
+    - description: Application is synced and healthy
+      send:
+      - slack-workflow-notifications
+  template.slack-workflow-notifications: |
+    message: |
+      *{{.app.metadata.name}}* sync operation has {{if eq .operationState.phase "Failed"}}failed{{else}}completed{{end}}.
+      Application details: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}.
+      Sync operation details: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}?operation=true .

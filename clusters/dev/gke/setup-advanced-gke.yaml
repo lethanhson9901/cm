@@ -1,0 +1,191 @@
+# 1. Node Pool Configuration
+apiVersion: container.googleapis.com/v1beta1
+kind: NodePool
+metadata:
+  name: primary-node-pool
+spec:
+  initialNodeCount: 3
+  autoscaling:
+    minNodeCount: 3
+    maxNodeCount: 10
+  management:
+    autoRepair: true
+    autoUpgrade: true
+  nodeConfig:
+    machineType: e2-standard-2
+    diskType: pd-ssd
+    diskSizeGb: 50
+    metadata:
+      disable-legacy-endpoints: "true"
+    workloadMetadataConfig:
+      mode: GKE_METADATA
+    shieldedInstanceConfig:
+      enableSecureBoot: true
+      enableIntegrityMonitoring: true
+    labels:
+      environment: production
+      node-type: primary
+    taints:
+      - key: dedicated
+        value: production
+        effect: NoSchedule
+
+---
+# 2. PodSecurityPolicy
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: restricted
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: true
+
+---
+# 3. Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# 4. Resource Quota with detailed limits
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-resources
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    requests.nvidia.com/gpu: "4"
+    persistentvolumeclaims: "10"
+    count/pods: "20"
+    count/services: "10"
+    count/secrets: "20"
+    count/configmaps: "20"
+
+---
+# 5. LimitRange for Default Container Limits
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+spec:
+  limits:
+  - default:
+      memory: 512Mi
+      cpu: 500m
+    defaultRequest:
+      memory: 256Mi
+      cpu: 200m
+    type: Container
+
+---
+# 6. Horizontal Pod Autoscaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sample-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sample-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# 7. Backup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-backup
+spec:
+  schedule: "0 1 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: backup-sa
+          containers:
+          - name: etcd-backup
+            image: gcr.io/google-containers/etcd:3.5.7
+            command: 
+            - /bin/sh
+            - -c
+            - "etcdctl snapshot save backup.db"
+          restartPolicy: OnFailure
+
+---
+# 8. Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: app-pdb
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: critical-app
+
+---
+# 9. Monitoring Configuration
+apiVersion: monitoring.googleapis.com/v1
+kind: ClusterMonitoring
+metadata:
+  name: monitoring-config
+spec:
+  components:
+    systemLogging:
+      enabled: true
+    kubernetesMonitoring:
+      enabled: true
+    prometheusMonitoring:
+      enabled: true

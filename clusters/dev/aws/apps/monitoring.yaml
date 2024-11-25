@@ -1,0 +1,63 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"  # Install before other apps
+    argocd.argoproj.io/refresh: "5m"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/lethanhson9901/cm.git
+    targetRevision: HEAD
+    path: platform/monitoring
+    plugin:
+      name: kustomized-helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        maxDuration: 3m
+        factor: 2
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/replicas
+
+  # Health check definitions
+  healthChecks:
+    - group: apps
+      kind: Deployment
+      name: prometheus-server
+      namespace: monitoring
+    - group: apps
+      kind: Deployment
+      name: grafana
+      namespace: monitoring
+    - group: apps
+      kind: Deployment
+      name: alertmanager
+      namespace: monitoring
+    - group: apps
+      kind: StatefulSet
+      name: prometheus-node-exporter
+      namespace: monitoring

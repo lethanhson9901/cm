@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- platform-apps.yaml
+- workload-apps.yaml
+- monitoring.yaml
+
+commonLabels:
+  environment: dev
+  managed-by: argocd
+
+namespace: argocd
